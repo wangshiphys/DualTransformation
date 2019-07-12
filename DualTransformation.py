@@ -17,17 +17,99 @@ See also:
 
 
 __all__ = [
-    "Searcher",
+    "DualTransformationForBond",
+    "DualTransformationForCluster",
 ]
 
 
+from itertools import combinations, product
+from time import strftime
+
 import matplotlib.pyplot as plt
 import numpy as np
-
 from HamiltonianPy import lattice_generator, SiteID
 
+from core import *
 
-class Searcher:
+
+def DualTransformationForBond(
+        which, axes, thetas,
+        J=None, K=None, G0=None, G1=None, rtol=1e-05, atol=1e-08
+):
+    """
+    Find all dual-transformations for a specific bond from the allowed
+    rotations.
+
+    All dual-transformations are write to a text file with six column.
+    The 1st, 2nd abd 3rd columns correspond to alpha0, beta0, theta0 and the
+    remaining columns correspond to alpha1, beta1 and theta1.
+
+    Parameters
+    ----------
+    which : ["x", "y" or "z"]
+        The type of the Bond.
+    axes : sequences
+        The allowed rotation axes.
+    thetas : sequence
+        The allowed rotation angles.
+    J, K, G0, G1 : int or float or None, optional
+        The coefficients of the Heisenberg, Kitaev, Gamma and GammaPrime terms.
+        If set to None, then the coefficient is integer generated randomly
+        in the range [1, 10).
+        Default: None.
+    rtol : float, optional
+        The relative tolerance parameter.
+        Default: 1e-05.
+    atol : float, optional
+        The absolute tolerance parameters.
+        Default: 1e-08.
+    """
+    J = np.random.randint(1, 10) if J is None else J
+    K = np.random.randint(1, 10) if K is None else K
+    G0 = np.random.randint(1, 10) if G0 is None else G0
+    G1 = np.random.randint(1, 10) if G1 is None else G1
+
+    if which == "x":
+        hij = np.array(
+            [[J + K, G1, G1], [G1, J, G0], [G1, G0, J]], dtype=np.float64
+        )
+        ValidRotation = ValidRotationForXBond
+        file_name = "ValidRotationForXBond"
+    elif which == "y":
+        hij = np.array(
+            [[J, G1, G0], [G1, J + K, G1], [G0, G1, J]], dtype=np.float64
+        )
+        ValidRotation = ValidRotationForYBond
+        file_name = "ValidRotationForYBond"
+    elif which == "z":
+        hij = np.array(
+            [[J, G0, G1], [G0, J, G1], [G1, G1, J + K]], dtype=np.float64
+        )
+        ValidRotation = ValidRotationForZBond
+        file_name = "ValidRotationForZBond"
+    else:
+        raise ValueError("Invalid `which` parameter: {0}".format(which))
+    file_name += " with J={0},K={1},G0={2},G1={3}.txt".format(J, K, G0, G1)
+
+    with open(file_name, "w", buffering=1) as fp:
+        time_fmt = "%Y-%m-%d %H:%M:%S"
+        fp.write("# Start running at: {0}\n".format(strftime(time_fmt)))
+        fp.write("# alpha0,   beta0,  theta0,  alpha1,   beta1,  theta1\n")
+        msg = "{0:>8.2f},{1:>8.2f},{2:>8.2f},{3:>8.2f},{4:>8.2f},{5:>8.2f}\n"
+
+        for r0, r1 in combinations(product(axes, thetas), r=2):
+            (alpha0, beta0), theta0 = r0
+            (alpha1, beta1), theta1 = r1
+            R0 = Rotation(alpha0 * np.pi, beta0 * np.pi, theta0 * np.pi)
+            R1 = Rotation(alpha1 * np.pi, beta1 * np.pi, theta1 * np.pi)
+            if ValidRotation(R0, R1, hij, rtol=rtol, atol=atol):
+                fp.write(
+                    msg.format(alpha0, beta0, theta0, alpha1, beta1, theta1)
+                )
+        fp.write("# Stop running at: {0}\n".format(strftime(time_fmt)))
+
+
+class DualTransformationForCluster:
     """
     Implementation of the algorithm for a systematic search for the dual
     transformations.
@@ -129,8 +211,8 @@ class Searcher:
             The starting rotations on an arbitrary nearest-neighbor bond.
         J, K, G0, G1 : int or float or None, optional
             The coefficients of the Heisenberg, Kitaev, Gamma and GammaPrime
-            terms.If set to None, then the coefficient is generated randomly
-            in the range [1, 2).
+            terms.If set to None, then the coefficient is integer generated
+            randomly in the range [1, 10).
             Default: None.
         rtol : float, optional
             The relative tolerance parameter.
@@ -145,14 +227,13 @@ class Searcher:
             The corresponding dual-transformation.
         """
 
-        J = np.random.random() + 1 if J is None else J
-        K = np.random.random() + 1 if K is None else K
-        G0 = np.random.random() + 1 if G0 is None else G0
-        G1 = np.random.random() + 1 if G1 is None else G1
-
-        hijx = np.array([[J + K, G1, G1], [G1, J, G0], [G1, G0, J]])
-        hijy = np.array([[J, G1, G0], [G1, J + K, G1], [G0, G1, J]])
-        hijz = np.array([[J, G0, G1], [G0, J, G1], [G1, G1, J + K]])
+        J = np.random.randint(1, 10) if J is None else J
+        K = np.random.randint(1, 10) if K is None else K
+        G0 = np.random.randint(1, 10) if G0 is None else G0
+        G1 = np.random.randint(1, 10) if G1 is None else G1
+        hijx = np.array([[J + K, G1, G1], [G1, J, G0], [G1, G0, J]], np.float64)
+        hijy = np.array([[J, G1, G0], [G1, J + K, G1], [G0, G1, J]], np.float64)
+        hijz = np.array([[J, G0, G1], [G0, J, G1], [G1, G1, J + K]], np.float64)
         hijs = dict(zip(self._all_azimuths, [hijx, hijy, hijz]))
         azimuth_to_bond_type = dict(zip(self._all_azimuths, ["x", "y", "z"]))
 
@@ -178,21 +259,21 @@ class Searcher:
                 [JNew + KNew, G1New, G1New],
                 [G1New, JNew, G0New],
                 [G1New, G0New, JNew],
-            ]
+            ], dtype=np.float64
         )
         hijy_new = np.array(
             [
                 [JNew, G1New, G0New],
                 [G1New, JNew + KNew, G1New],
                 [G0New, G1New, JNew],
-            ]
+            ], dtype=np.float64
         )
         hijz_new = np.array(
             [
                 [JNew, G0New, G1New],
                 [G0New, JNew, G1New],
                 [G1New, G1New, JNew + KNew],
-            ]
+            ], dtype=np.float64
         )
         hijs_new = dict(zip(self._all_azimuths, [hijx_new, hijy_new, hijz_new]))
 
@@ -241,46 +322,50 @@ class Searcher:
 
 
 if __name__ == "__main__":
-    from HamiltonianPy.rotation3d import *
-    from itertools import product
+    from pathlib import Path
 
-    solver = Searcher("triangle")
-    Rs = [
-        E, INVERSION,
-        RX30, RX45, RX60, RX90, RX180, RX270,
-        RY30, RY45, RY60, RY90, RY180, RY270,
-        RZ30, RZ45, RZ60, RZ90, RZ180, RZ270,
-        R111_60, R111_120, R111_180, R111_240, R111_300,
-        AP0, AP1, AP2,
-    ]
-    TMP = [E, INVERSION]
+    solver = DualTransformationForCluster("triangle")
 
+    J = 1
+    K = G0 = G1 = 0
+    rotations_name = "ValidRotationX with J={0},K={1},G0={2},G1={3}.txt".format(
+        J, K, G0, G1
+    )
+    fig_name = "alpha0={0:.2f},beta0={1:.2f},theta0={2:.2f}"
+    fig_name += "alpha1={3:.2f},beta1={4:.2f},theta1={5:.2f}.jpg"
+    fig_path_template = "{0}-sublattice-transformation/"
 
-    for A, B, C, D in product(TMP, Rs, TMP, Rs):
-        R0 = np.dot(A, B)
-        R1 = np.dot(C, D)
-        rotations = solver(
-            R0, R1,
-            # J=1, K=0, G0=0, G1=0,
-            rtol=1e-2, atol=1e-4,
+    bond_rotations = np.loadtxt(rotations_name, comments="#", delimiter=",")
+    for r in bond_rotations:
+        R0 = Rotation(r[0] * np.pi, r[1] * np.pi, r[2] * np.pi)
+        R1 = Rotation(r[3] * np.pi, r[4] * np.pi, r[5] * np.pi)
+        cluster_rotations = solver(
+            R0, R1, J=J, K=K, G0=G0, G1=G1, rtol=1e-2, atol=1e-4
         )
 
-        if rotations is not None:
+        if cluster_rotations is not None:
+            fig_path = fig_path_template.format(len(cluster_rotations))
+            Path(fig_path).mkdir(exist_ok=True, parents=True)
+
             fig, ax = plt.subplots()
             ax.set_axis_off()
             ax.set_aspect("equal")
             lines = []
             labels = []
-            for index, sub_rotations in enumerate(rotations):
-                print("SiteIndex={0}".format(index))
-                for row in sub_rotations[0]:
-                    print(row)
+            for index, sub_rotations in enumerate(cluster_rotations):
+                # print("SiteIndex={0}".format(index))
+                # for row in sub_rotations[0]:
+                #     print(row)
                 sites = np.stack(sub_rotations[1:])
-                line, = ax.plot(sites[:, 0], sites[:, 1], marker="o", ls="")
+                line, = ax.plot(
+                    sites[:, 0], sites[:, 1], marker="o", ls="", ms=30
+                )
                 lines.append(line)
                 labels.append("SiteIndex={0}".format(index))
-            print("=" * 80)
+            # print("=" * 80)
             ax.legend(lines, labels, loc="upper left", fontsize="xx-large")
-            plt.get_current_fig_manager().window.showMaximized()
-            plt.show()
+            fig.set_size_inches(19.2, 9.3)
+            fig.savefig(fig_path + fig_name.format(*r))
+            # plt.get_current_fig_manager().window.showMaximized()
+            # plt.show()
             plt.close("all")
